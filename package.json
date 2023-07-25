@@ -1,0 +1,51 @@
+{
+  "name": "dicom-anonimizer",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vue-cli-service serve",
+    "build": "vue-cli-service build",
+    "lint": "vue-cli-service lint"
+  },
+  "dependencies": {
+    "@extractus/feed-extractor": "^6.2.3",
+    "autoprefixer": "^10.4.14",
+    "core-js": "^3.8.3",
+    "node-sass": "^9.0.0",
+    "postcss": "^8.4.24",
+    "require": "^2.4.20",
+    "sass-loader": "^13.3.2",
+    "vue": "^2.6.14",
+    "vue-axios": "^3.5.2",
+    "vue-simple-upload": "^0.1.6"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.16",
+    "@babel/eslint-parser": "^7.12.16",
+    "@vue/cli-plugin-babel": "~5.0.0",
+    "@vue/cli-plugin-eslint": "~5.0.0",
+    "@vue/cli-service": "~5.0.0",
+    "eslint": "^7.32.0",
+    "eslint-plugin-vue": "^8.0.3",
+    "vue-template-compiler": "^2.6.14"
+  },
+  "eslintConfig": {
+    "root": true,
+    "env": {
+      "node": true
+    },
+    "extends": [
+      "plugin:vue/essential",
+      "eslint:recommended"
+    ],
+    "parserOptions": {
+      "parser": "@babel/eslint-parser"
+    },
+    "rules": {}
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}
