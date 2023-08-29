@@ -6,7 +6,9 @@
         type="file"
         name="file"
         required="required"
-        id="file-selector"
+        id="fileSelector"
+        ref="fileSelector"
+        accept=".iso"
       />
       <div class="fileUploader__description">
         <div class="fileUploader__description-default">
@@ -17,9 +19,11 @@
         </div>
       </div>
     </div>
-    <button class="submitButton" @click="event => submitForm(event)">
-      Изменить файл
-    </button>
+    <div class="buttons">
+      <button class="submitButton" @click="event => submitForm(event)">
+        Изменить файл
+      </button>
+    </div>
   </div>
 </template>
 
@@ -29,7 +33,7 @@ export default {
   methods: {
     submitForm(event) {
       event.preventDefault()
-      let file = document.getElementById('file-selector').files[0]
+      let file = this.$refs['fileSelector'].files[0]
       if (file) {
         this.$emit('submitFile', file)
       }
@@ -41,6 +45,7 @@ export default {
 <style lang="scss">
 .fileUploader {
   $root: &;
+
   &__uploadArea {
     position: relative;
     width: 100%;
@@ -51,6 +56,7 @@ export default {
       opacity: 0;
       width: 100%;
       height: 100%;
+      cursor: pointer;
 
       &:valid + #{$root}__description {
         #{$root}__description-success {

@@ -1,33 +1,38 @@
 <template>
   <div id="app">
     <h1 class="title">Передача файла исследования</h1>
-    <file-uploader @submitFile="submitFile" v-show="state === STATES[0]" />
-
-    <div class="loadingTemplate" v-show="state === STATES[1]">
-      <label>Происходит магия, пожалуйста, подождите</label>
-    </div>
-
-    <div id="resultTemplate" v-show="state === STATES[3]">
-      <label>
-        Успех! Новые данные сформированы. Вы можете скачать их по ссылке ниже
-      </label>
+    <file-uploader
+      @submitFile="submitFile"
+      v-show="reader && state === STATES[0]"
+      ref="fileUploader"
+    />
+    <div v-show="state !== STATES[0]">
+      <p class="statusText">{{ STATES_TEXT[state] }}</p>
       <div class="buttons">
-        <a id="download-link">Скачать данные</a>
-        <button @click="clearData">Начать заново</button>
+        <a ref="downloadLink" class="downloadLink" v-show="state == STATES[2]">
+          Скачать данные
+        </a>
+        <button @click="clearData" v-show="state !== STATES[1]">
+          Начать заново
+        </button>
       </div>
-    </div>
-
-    <div id="errorTemplate" v-show="state === STATES[4]">
-      <label> Произошла ошибка. Попробуйте позже. </label>
-      <button @click="clearData">Начать заново</button>
     </div>
   </div>
 </template>
 
 <script>
 import FileUploader from './components/FileUploader.vue'
+
 const STATES = ['start', 'loading', 'finish', 'error']
-const batchSize = 2048
+const STATES_TEXT = {
+  start: '',
+  loading: 'Происходит магия, пожалуйста, подождите',
+  finish:
+    'Успех! Новые данные сформированы. Вы можете скачать их по ссылке ниже',
+  error: 'Произошла ошибка. Попробуйте позже.'
+}
+const BATCH_SIZE = 2048
+const MUTABLE_STRING = /[A-Z]+\s[A-Z]\.[A-Z]\./gm
 
 export default {
   name: 'app',
@@ -38,91 +43,130 @@ export default {
   data() {
     return {
       STATES,
+      STATES_TEXT,
       state: STATES[0],
-      loadStatus: 0
+      loadStatus: 0,
+      reader: null,
+      fileName: ''
     }
   },
+  mounted() {
+    this.reader = new FileReader()
+
+    this.reader.addEventListener('loadend', this.onReadedFile)
+    this.reader.addEventListener('error', this.onError)
+  },
   methods: {
-    clearData() {
-      document.getElementById('file-selector').value = null
-      this.state = STATES[0]
-    },
     submitFile(file) {
       this.state = STATES[1]
 
-      const startTime = Date.now() // for checking processing time
-      const link = document.getElementById('download-link')
-      const changeState = this.changeState
-      const reader = new FileReader()
-      const fileName = file.name
-      reader.readAsArrayBuffer(file)
+      this.fileName = file.name
+      this.reader.readAsArrayBuffer(file)
+
       file = null
+    },
 
-      reader.onload = function () {
-        let array = new Uint8Array(reader.result)
-        const batchCount = Math.floor(array.length / batchSize)
-        const emptyArray = String(new Uint8Array(batchSize))
-        const changes = []
+    onError(error) {
+      console.error(error)
+      this.state = STATES[4]
+    },
+    onReadedFile() {
+      const startTime = Date.now()
 
-        for (let i = 0; i < batchCount; i++) {
-          const batch = new Uint8Array(
-            array.buffer,
-            i * batchSize,
-            i === batchCount - 1 ? undefined : batchSize
-          )
-          // skip empty batches for optimization
-          if (String(batch) !== emptyArray) {
-            const originalString = String.fromCharCode.apply(null, batch)
+      const array = new Uint8Array(this.reader.result)
+      const pureArray = this.anonimizeArray(array)
+      this.saveArrayToFile(pureArray)
 
-            const findedFIOIndex = [
-              ...originalString.matchAll(/[A-Z]+\s[A-Z]\.[A-Z]\./gm)
-            ]
+      this.state = STATES[2]
+      console.log('total time: ', Date.now() - startTime)
+    },
 
-            if (findedFIOIndex.length) {
-              const replacedString = originalString.replaceAll(
-                /[A-Z]+\s[A-Z]\.[A-Z]\./gm,
-                match =>
-                  match.length > 14
-                    ? 'A'.repeat(match.length - 14) + 'ANONIMOUS A.A.'
-                    : 'ANONIMOUS A.A.'.substring(0, match.length)
-              )
-              const replacedPart = Uint8Array.from(
-                replacedString.split('').map(x => x.charCodeAt())
-              )
+    anonimizeArray(array) {
+      const changes = this.getChangesForArray(array)
+      const pureArray = this.applyChangesToArray(array, changes)
 
-              changes.push({
-                newData: replacedPart,
-                startIndex: i
-              })
-            }
+      return pureArray
+    },
+
+    getChangesForArray(array) {
+      const batchCount = Math.floor(array.length / BATCH_SIZE)
+      const emptyArray = String(new Uint8Array(BATCH_SIZE))
+      const changes = []
+
+      for (let batchIndex = 0; batchIndex < batchCount; batchIndex++) {
+        const batch = new Uint8Array(
+          array.buffer,
+          batchIndex * BATCH_SIZE,
+          batchIndex === batchCount - 1 ? undefined : BATCH_SIZE
+        )
+
+        if (String(batch) !== emptyArray) {
+          const change = this.getChangeForBatch(batch, batchIndex)
+
+          if (change) {
+            changes.push(change)
           }
         }
-
-        changes.forEach(change => {
-          change.newData.forEach((changedByte, byteId) => {
-            array[change.startIndex * batchSize + byteId] = changedByte
-          })
-        })
-
-        //// -------------------- Create url for saving to file ----------------------
-        const blob = new Blob([array], { type: 'text/plain' })
-
-        link.href = URL.createObjectURL(blob)
-        link.download = 'anon_' + fileName
-        changeState(STATES[2])
-
-        // eslint-disable-next-line no-console
-        console.log('total time: ', Date.now() - startTime)
       }
 
-      reader.onerror = function () {
-        // eslint-disable-next-line no-console
-        console.error(reader.error)
-        changeState(STATES[4])
-      }
+      return changes
     },
-    changeState(newState) {
-      this.state = newState
+
+    getChangeForBatch(batch, batchIndex) {
+      const originalString = String.fromCharCode.apply(null, batch)
+      const pureString = this.anonimizeString(originalString)
+
+      if (pureString !== originalString) {
+        return {
+          newData: Uint8Array.from(
+            pureString.split('').map(x => x.charCodeAt())
+          ),
+          startIndex: batchIndex
+        }
+      }
+
+      return null
+    },
+
+    anonimizeString(originalString) {
+      let pureString = originalString
+
+      const findedFIOIndex = [...originalString.matchAll(MUTABLE_STRING)]
+
+      if (findedFIOIndex.length) {
+        pureString = originalString.replaceAll(MUTABLE_STRING, match =>
+          match.length > 14
+            ? 'A'.repeat(match.length - 14) + 'ANONIMOUS A.A.'
+            : 'ANONIMOUS A.A.'.substring(0, match.length)
+        )
+      }
+
+      return pureString
+    },
+
+    applyChangesToArray(array, changes) {
+      let pureArray = array
+
+      changes.forEach(change => {
+        change.newData.forEach((changedByte, byteId) => {
+          pureArray[change.startIndex * BATCH_SIZE + byteId] = changedByte
+        })
+      })
+
+      return pureArray
+    },
+
+    saveArrayToFile(array) {
+      const link = this.$refs['downloadLink']
+      const blob = new Blob([array], { type: 'text/plain' })
+
+      link.href = URL.createObjectURL(blob)
+      link.download = 'anon_' + this.fileName
+    },
+
+    clearData() {
+      this.$refs['fileUploader'].$refs['fileSelector'].value = null
+      this.state = STATES[0]
     }
   }
 }
@@ -159,7 +203,7 @@ body {
   font-weight: 500;
 }
 
-label {
+.statusText {
   display: block;
   overflow: hidden;
   margin: 4px 0;
@@ -168,34 +212,28 @@ label {
   text-transform: uppercase;
 }
 
-input,
-button {
-  cursor: pointer;
-}
-
-button,
-#download-link {
-  margin-top: 30px;
-  padding: 8px 30px;
-  border: 0;
-  border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: black;
-
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.6);
-  }
-}
-
 .buttons {
   display: flex;
   justify-content: space-between;
   align-items: center;
+
+  & > * {
+    margin-top: 30px;
+    padding: 8px 30px;
+    border: 0;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.8);
+    cursor: pointer;
+
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: black;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.6);
+    }
+  }
 }
 </style>
