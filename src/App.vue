@@ -3,16 +3,20 @@
     <h1 class="title">Передача файла исследования</h1>
     <file-uploader
       @submitFile="submitFile"
-      v-show="reader && state === STATES[0]"
+      v-show="reader && state === STATES.start.title"
       ref="fileUploader"
     />
-    <div v-show="state !== STATES[0]">
-      <p class="statusText">{{ STATES_TEXT[state] }}</p>
+    <div v-show="state !== STATES.start.title">
+      <p class="statusText">{{ STATES[state].text }}</p>
       <div class="buttons">
-        <a ref="downloadLink" class="downloadLink" v-show="state == STATES[2]">
+        <a
+          ref="downloadLink"
+          class="downloadLink"
+          v-show="state == STATES.finish.title"
+        >
           Скачать данные
         </a>
-        <button @click="clearData" v-show="state !== STATES[1]">
+        <button @click="clearData" v-show="state !== STATES.loading.title">
           Начать заново
         </button>
       </div>
@@ -23,13 +27,17 @@
 <script>
 import FileUploader from './components/FileUploader.vue'
 
-const STATES = ['start', 'loading', 'finish', 'error']
-const STATES_TEXT = {
-  start: '',
-  loading: 'Происходит магия, пожалуйста, подождите',
-  finish:
-    'Успех! Новые данные сформированы. Вы можете скачать их по ссылке ниже',
-  error: 'Произошла ошибка. Попробуйте позже.'
+const STATES = {
+  start: { title: 'start', text: '' },
+  loading: {
+    title: 'loading',
+    text: 'Происходит магия, пожалуйста, подождите'
+  },
+  finish: {
+    title: 'finish',
+    text: 'Успех! Новые данные сформированы. Вы можете скачать их по ссылке ниже'
+  },
+  error: { title: 'error', text: 'Произошла ошибка. Попробуйте позже.' }
 }
 const BATCH_SIZE = 2048
 const MUTABLE_STRING = /[A-Z]+\s[A-Z]\.[A-Z]\./gm
@@ -43,8 +51,7 @@ export default {
   data() {
     return {
       STATES,
-      STATES_TEXT,
-      state: STATES[0],
+      state: STATES.start.title,
       loadStatus: 0,
       reader: null,
       fileName: ''
@@ -56,9 +63,13 @@ export default {
     this.reader.addEventListener('loadend', this.onReadedFile)
     this.reader.addEventListener('error', this.onError)
   },
+  beforeDestroy() {
+    this.reader.removeEventListener('loadend')
+    this.reader.removeEventListener('error')
+  },
   methods: {
     submitFile(file) {
-      this.state = STATES[1]
+      this.state = STATES.loading.title
 
       this.fileName = file.name
       this.reader.readAsArrayBuffer(file)
@@ -68,7 +79,7 @@ export default {
 
     onError(error) {
       console.error(error)
-      this.state = STATES[4]
+      this.state = STATES.error.title
     },
     onReadedFile() {
       const startTime = Date.now()
@@ -77,7 +88,7 @@ export default {
       const pureArray = this.anonimizeArray(array)
       this.saveArrayToFile(pureArray)
 
-      this.state = STATES[2]
+      this.state = STATES.finish.title
       console.log('total time: ', Date.now() - startTime)
     },
 
@@ -166,7 +177,7 @@ export default {
 
     clearData() {
       this.$refs['fileUploader'].$refs['fileSelector'].value = null
-      this.state = STATES[0]
+      this.state = STATES.start.title
     }
   }
 }
